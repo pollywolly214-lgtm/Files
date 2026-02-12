@@ -1,16 +1,14 @@
-# File Organization App
+# Friendly File Namer
 
-Static web app that helps users:
+A simple static wizard for naming uploaded files using your Project → ASY → PRT standard.
 
-- Upload a file.
-- Answer a wizard with Project / Assembly / Part / Thickness / Revision / Cut data.
-- Auto-generate filenames using:
-  - `PRT-[PROJ]-[ASY]-[PRT]-[THK]-P[REV]`
-  - `NS-[PROJ]-[ASY]-[PRT]-[THK]-P[REV]-C[CUT]`
-  - `NS-[PROJ]-[ASY]-[THK]-P[REV]-C[CUT]`
-- Preview OneDrive autosave destination path.
-- Download a renamed local copy.
-- Save metadata history in browser localStorage.
+## What changed
+- One-question-at-a-time flow.
+- Friendly prompts and calm, minimal UI.
+- Fade transition between steps.
+- Easy dropdown selection for assembly and part numbers (no create-new actions).
+- Auto-generated names for PRT / NS / ASY patterns.
+- Suggested cut counter (`C###`) and quick final download of renamed file.
 
 ## Run locally
 
@@ -18,8 +16,7 @@ Static web app that helps users:
 python3 -m http.server 4173
 ```
 
-Then open <http://localhost:4173>.
+Open: <http://localhost:4173>
 
 ## Notes
-
-This implementation is static HTML/CSS/JS. It supports OneDrive root/url configuration and path routing logic. Full server-side upload directly to OneDrive requires Microsoft Graph auth and API integration.
+This is a static HTML/CSS/JS app. It currently previews OneDrive path logic and local renamed download. Direct upload to OneDrive requires Microsoft Graph integration.
