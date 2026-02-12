@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>File Organization Wizard</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <main class="app">
+    <header>
+      <h1>Project → ASY → PRT File Organizer</h1>
+      <p>Upload a file, answer guided questions, and auto-generate names using your standard.</p>
+    </header>
+
+    <section class="card">
+      <h2>OneDrive Setup</h2>
+      <label>
+        OneDrive root path (display / metadata)
+        <input id="oneDriveRoot" type="text" placeholder="OneDriveRoot" />
+      </label>
+      <label>
+        OneDrive folder URL (optional)
+        <input id="oneDriveUrl" type="url" placeholder="https://onedrive.live.com/..." />
+      </label>
+      <button id="saveOneDrive">Save OneDrive Settings</button>
+      <a id="openOneDrive" target="_blank" rel="noopener">Open OneDrive Folder</a>
+      <p class="note">This static app stores settings locally and provides a folder deep-link. Actual upload API calls need Microsoft Graph auth in production.</p>
+    </section>
+
+    <section class="card">
+      <h2>Upload + Naming Wizard</h2>
+      <form id="wizardForm">
+        <label>
+          Upload file
+          <input id="fileInput" type="file" required />
+        </label>
+
+        <label>
+          Project
+          <div class="row">
+            <select id="projectSelect"></select>
+            <button type="button" id="newProjectBtn">Create New</button>
+          </div>
+        </label>
+
+        <label>
+          File type
+          <select id="fileType" required>
+            <option value="PRT">PRT</option>
+            <option value="NS">NS</option>
+            <option value="ASY">ASY</option>
+          </select>
+        </label>
+
+        <label>
+          Assembly (ASY)
+          <div class="row">
+            <select id="asySelect"></select>
+            <button type="button" id="newAsyBtn">Create New</button>
+          </div>
+        </label>
+
+        <label id="nsScopeWrap" class="hidden">
+          Nest scope
+          <select id="nestScope">
+            <option value="single">Single Part</option>
+            <option value="multi">Multi-Part (Assembly-Level)</option>
+          </select>
+        </label>
+
+        <label id="partWrap">
+          Part (PRT)
+          <div class="row">
+            <select id="partSelect"></select>
+            <button type="button" id="newPartBtn">Create New</button>
+          </div>
+        </label>
+
+        <label id="cutStockWrap">
+          Cut-stock part?
+          <select id="cutStock">
+            <option value="yes">Yes</option>
+            <option value="no">No</option>
+          </select>
+        </label>
+
+        <label id="thkWrap">
+          Thickness (THK)
+          <select id="thk">
+            <option value="0.25in">0.25in</option>
+            <option value="0.125in">0.125in</option>
+            <option value="0.063in">0.063in</option>
+            <option value="0.025in">0.025in</option>
+          </select>
+        </label>
+
+        <label>
+          Revision (P#)
+          <input id="revision" type="number" min="1" step="1" value="1" required />
+        </label>
+
+        <label id="cutWrap" class="hidden">
+          Cut number (C###)
+          <input id="cut" type="text" pattern="C\d{3}" placeholder="C001" />
+        </label>
+
+        <button type="submit">Generate Name + Save</button>
+      </form>
+
+      <div class="result">
+        <h3>Generated Output</h3>
+        <p><strong>Filename:</strong> <span id="generatedName">—</span></p>
+        <p><strong>Auto-save path:</strong> <span id="savePath">—</span></p>
+        <button id="downloadBtn" class="hidden">Download renamed copy</button>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>History</h2>
+      <ul id="history"></ul>
+    </section>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>
