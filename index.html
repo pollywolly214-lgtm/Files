@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Friendly File Namer</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <main class="app">
+    <h1>Friendly File Namer</h1>
+    <p class="subtitle">A calm step-by-step flow for naming files the right way.</p>
+
+    <section class="wizard card">
+      <p id="progressText" class="progress">Step 1 of 9</p>
+      <div id="stepContainer" class="step-shell"></div>
+    </section>
+
+    <section class="card result">
+      <h2>Your filename</h2>
+      <p id="finalName">—</p>
+      <p id="finalPath">—</p>
+      <button id="downloadBtn" class="hidden">Download renamed copy</button>
+    </section>
+
+    <section class="card">
+      <h2>Recent names</h2>
+      <ul id="history"></ul>
+    </section>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>
