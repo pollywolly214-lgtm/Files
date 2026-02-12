@@ -1,0 +1,83 @@
+:root {
+  color-scheme: light;
+  --bg: #f5f7fb;
+  --card: #ffffff;
+  --accent: #1e63da;
+  --text: #1b2740;
+  --border: #d7deec;
+}
+
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+  color: var(--text);
+  background: var(--bg);
+}
+
+.app {
+  max-width: 900px;
+  margin: 2rem auto;
+  padding: 0 1rem;
+}
+
+.card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 1rem;
+  margin-bottom: 1rem;
+}
+
+h1 { margin-bottom: 0.5rem; }
+label {
+  display: block;
+  margin: 0.75rem 0;
+  font-weight: 600;
+}
+input, select, button {
+  width: 100%;
+  margin-top: 0.35rem;
+  padding: 0.6rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+button {
+  background: var(--accent);
+  color: white;
+  border: none;
+  cursor: pointer;
+}
+button:hover { opacity: 0.92; }
+.row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0.5rem;
+}
+.row button {
+  width: auto;
+  white-space: nowrap;
+}
+.note {
+  font-size: 0.9rem;
+  color: #4d5f85;
+}
+.result {
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px dashed var(--border);
+}
+.hidden { display: none !important; }
+#openOneDrive {
+  display: inline-block;
+  margin-top: 0.75rem;
+}
+#history {
+  list-style: none;
+  padding-left: 0;
+}
+#history li {
+  padding: 0.5rem 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 0.95rem;
+}
