@@ -7,7 +7,8 @@ const ui = {
   finalName: document.getElementById('finalName'),
   finalPath: document.getElementById('finalPath'),
   history: document.getElementById('history'),
-  downloadBtn: document.getElementById('downloadBtn')
+  downloadBtn: document.getElementById('downloadBtn'),
+  inlineError: document.getElementById('inlineError')
 };
 
 const answers = {
@@ -17,7 +18,6 @@ const answers = {
   assembly: '001',
   scope: 'single',
   part: '051',
-  cutStock: 'yes',
   thk: '0.25in',
   rev: 1,
   cut: nextCut(state.cutCounter)
@@ -26,6 +26,7 @@ const answers = {
 let currentStep = 0;
 const assemblyChoices = Array.from({ length: 20 }, (_, i) => String(i + 1).padStart(3, '0'));
 const partChoices = Array.from({ length: 25 }, (_, i) => String(51 + i * 2).padStart(3, '0'));
+const thicknessChoices = ['0.25in', '0.125in', '0.063in', '0.025in'];
 
 renderStep();
 renderHistory();
@@ -34,45 +35,60 @@ function steps() {
   return [
     {
       title: 'First, choose your file',
-      hint: 'We will keep the extension and rename it for you.',
-      body: `<label>Upload file<input id="fileInput" type="file" required /></label>`,
+      hint: 'We keep the extension and rename only the filename body.',
+      body: `<label for="fileInput">Upload file<input id="fileInput" type="file" required /></label>
+             <p class="tiny" id="fileMeta">${answers.file ? `${answers.file.name} (${formatBytes(answers.file.size)})` : 'No file selected yet.'}</p>`,
       setup: () => {
         const input = byId('fileInput');
-        input.onchange = () => (answers.file = input.files[0]);
+        input.onchange = () => {
+          answers.file = input.files?.[0] || null;
+          renderStep();
+        };
       },
-      valid: () => !!answers.file
+      valid: () => Boolean(answers.file),
+      error: 'Please choose a file to continue.'
     },
     {
       title: 'What is this for?',
-      hint: 'Pick the kind of file so we can ask only what matters.',
-      body: `<label>Type<select id="type"><option value="PRT">Part (PRT)</option><option value="NS">Nest (NS)</option><option value="ASY">Assembly (ASY)</option></select></label>`,
+      hint: 'File type controls which naming tokens are included.',
+      body: `<label for="type">Type<select id="type"><option value="PRT">Part (PRT)</option><option value="NS">Nest (NS)</option><option value="ASY">Assembly (ASY)</option></select></label>`,
       setup: () => {
         const el = byId('type');
         el.value = answers.type;
-        el.onchange = () => (answers.type = el.value);
+        el.onchange = () => {
+          answers.type = el.value;
+          if (answers.type !== 'NS') answers.scope = 'single';
+          renderStep();
+        };
       },
-      valid: () => true
+      valid: () => ['PRT', 'NS', 'ASY'].includes(answers.type),
+      error: 'Please select a valid file type.'
     },
     {
-      title: 'Great. What project is this for?',
-      hint: 'Use a 4-digit project number.',
-      body: `<label>Project #<input id="project" value="${answers.project}" maxlength="4" placeholder="1251" /></label>`,
+      title: 'What project is this for?',
+      hint: 'Project numbers must be 4 digits.',
+      body: `<label for="project">Project #<input id="project" value="${answers.project}" maxlength="4" inputmode="numeric" placeholder="1251" /></label>`,
       setup: () => {
         const el = byId('project');
-        el.oninput = () => (answers.project = el.value.replace(/\D/g, '').slice(0, 4));
+        el.oninput = () => {
+          answers.project = el.value.replace(/\D/g, '').slice(0, 4);
+          el.value = answers.project;
+        };
       },
-      valid: () => /^\d{4}$/.test(answers.project)
+      valid: () => /^\d{4}$/.test(answers.project),
+      error: 'Project must be exactly 4 digits (example: 1251).'
     },
     {
       title: 'Pick an assembly number',
-      hint: 'Simple list, no setup needed.',
-      body: `<label>Assembly<select id="assembly">${assemblyChoices.map(a => `<option>${a}</option>`).join('')}</select></label>`,
+      hint: 'Assembly is always included as ASY-### in path and name.',
+      body: `<label for="assembly">Assembly<select id="assembly">${assemblyChoices.map(a => `<option value="${a}">${a}</option>`).join('')}</select></label>`,
       setup: () => {
         const el = byId('assembly');
         el.value = answers.assembly;
         el.onchange = () => (answers.assembly = el.value);
       },
-      valid: () => true
+      valid: () => assemblyChoices.includes(answers.assembly),
+      error: 'Please choose an assembly number.'
     },
     nestScopeStep(),
     partStep(),
@@ -86,15 +102,16 @@ function steps() {
 function nestScopeStep() {
   if (answers.type !== 'NS') return null;
   return {
-    title: 'Almost done — is this nest for one part or many?',
-    hint: 'If it is multi-part, part number is skipped.',
-    body: `<label>Nest scope<select id="scope"><option value="single">Single part</option><option value="multi">Multi-part (assembly-level)</option></select></label>`,
+    title: 'Is this nest for one part or many?',
+    hint: 'Multi-part nests skip the part token.',
+    body: `<label for="scope">Nest scope<select id="scope"><option value="single">Single part</option><option value="multi">Multi-part (assembly-level)</option></select></label>`,
     setup: () => {
       const el = byId('scope');
       el.value = answers.scope;
       el.onchange = () => (answers.scope = el.value);
     },
-    valid: () => true
+    valid: () => ['single', 'multi'].includes(answers.scope),
+    error: 'Please choose single-part or multi-part.'
   };
 }
 
@@ -104,99 +121,120 @@ function partStep() {
   return {
     title: 'Pick a part number',
     hint: 'Odd series starts at 051 to match your standard.',
-    body: `<label>Part<select id="part">${partChoices.map(p => `<option>${p}</option>`).join('')}</select></label>`,
+    body: `<label for="part">Part<select id="part">${partChoices.map(p => `<option value="${p}">${p}</option>`).join('')}</select></label>`,
     setup: () => {
       const el = byId('part');
       el.value = answers.part;
       el.onchange = () => (answers.part = el.value);
     },
-    valid: () => true
+    valid: () => partChoices.includes(answers.part),
+    error: 'Please choose a part number.'
   };
 }
 
 function thicknessStep() {
-  const needed = answers.type === 'NS' || (answers.type === 'PRT' && answers.cutStock === 'yes');
+  const needed = answers.type === 'NS' || answers.type === 'PRT';
   if (!needed) return null;
   return {
     title: 'What thickness should we use?',
-    hint: 'This goes straight into the filename token.',
-    body: `<label>Thickness<select id="thk"><option>0.25in</option><option>0.125in</option><option>0.063in</option><option>0.025in</option></select></label>`,
+    hint: 'Thickness becomes a filename token (for PRT/NS only).',
+    body: `<label for="thk">Thickness<select id="thk">${thicknessChoices.map(t => `<option value="${t}">${t}</option>`).join('')}</select></label>`,
     setup: () => {
       const el = byId('thk');
       el.value = answers.thk;
       el.onchange = () => (answers.thk = el.value);
     },
-    valid: () => true
+    valid: () => thicknessChoices.includes(answers.thk),
+    error: 'Please choose a thickness.'
   };
 }
 
 function revisionStep() {
   return {
     title: 'Revision number?',
-    hint: 'Just enter the number. We add the P for you.',
-    body: `<label>Revision<input id="rev" type="number" min="1" step="1" value="${answers.rev}" /></label>`,
+    hint: 'Enter a positive whole number. We add P automatically.',
+    body: `<label for="rev">Revision<input id="rev" type="number" min="1" step="1" value="${answers.rev}" /></label>`,
     setup: () => {
       const el = byId('rev');
-      el.oninput = () => (answers.rev = Number(el.value || 0));
+      el.oninput = () => {
+        answers.rev = Number.parseInt(el.value, 10);
+      };
     },
-    valid: () => Number.isInteger(answers.rev) && answers.rev > 0
+    valid: () => Number.isInteger(answers.rev) && answers.rev > 0,
+    error: 'Revision must be a whole number greater than 0.'
   };
 }
 
 function cutStep() {
   if (answers.type !== 'NS') return null;
   return {
-    title: 'Last one: cut number',
-    hint: 'Format is always C###.',
-    body: `<label>Cut<input id="cut" value="${answers.cut}" placeholder="C001" /></label>`,
+    title: 'Cut number',
+    hint: 'Required format is C### (example: C001).',
+    body: `<label for="cut">Cut<input id="cut" value="${answers.cut}" placeholder="C001" /></label>`,
     setup: () => {
       const el = byId('cut');
-      el.oninput = () => (answers.cut = el.value.toUpperCase().replace(/\s/g, ''));
+      el.oninput = () => {
+        answers.cut = normalizeCut(el.value);
+        el.value = answers.cut;
+      };
+      el.onblur = () => {
+        answers.cut = normalizeCut(el.value);
+        el.value = answers.cut;
+      };
     },
-    valid: () => /^C\d{3}$/.test(answers.cut)
+    valid: () => /^C\d{3}$/.test(answers.cut),
+    error: 'Cut must be in C### format (example: C007).'
   };
 }
 
 function reviewStep() {
   const generated = buildFilename();
   const savePath = buildPath();
+  const hasFile = Boolean(answers.file);
   return {
-    title: 'Nice work ✨ Ready to save',
-    hint: 'You can go back and tweak anything.',
-    body: `<p><strong>${generated}</strong></p><p class="tiny">${savePath}${generated}</p>`,
+    title: 'Review and save',
+    hint: 'Use Back to tweak anything, or download your renamed copy.',
+    body: hasFile
+      ? `<p><strong>${generated}</strong></p><p class="tiny">${savePath}${generated}</p>`
+      : '<p class="tiny">Missing file information. Go back and upload a file.</p>',
     setup: () => {
-      ui.finalName.textContent = generated;
-      ui.finalPath.textContent = `${savePath}${generated}`;
-      ui.downloadBtn.classList.remove('hidden');
-      ui.downloadBtn.onclick = () => downloadRenamed(answers.file, generated);
-      persistRecord(generated, savePath);
+      ui.finalName.textContent = hasFile ? generated : '—';
+      ui.finalPath.textContent = hasFile ? `${savePath}${generated}` : '—';
+      ui.downloadBtn.classList.toggle('hidden', !hasFile);
+      ui.downloadBtn.disabled = !hasFile;
+      ui.downloadBtn.onclick = () => hasFile && downloadRenamed(answers.file, generated);
+      if (hasFile) persistRecord(generated, savePath);
     },
-    valid: () => true,
+    valid: () => hasFile,
+    error: 'A file must be uploaded before saving.',
     hideNext: true
   };
 }
 
-function renderStep(direction = 'in') {
+function renderStep() {
   const flow = steps();
-  currentStep = Math.min(currentStep, flow.length - 1);
+  currentStep = Math.max(0, Math.min(currentStep, flow.length - 1));
   const step = flow[currentStep];
 
   ui.progressText.textContent = `Step ${currentStep + 1} of ${flow.length}`;
+  ui.inlineError.textContent = '';
+
   const shell = document.createElement('div');
-  shell.className = `step ${direction === 'out' ? 'fade-out' : ''}`;
+  shell.className = 'step';
   shell.innerHTML = `
     <h2>${step.title}</h2>
     <p class="tiny">${step.hint}</p>
     ${step.body}
     <div class="row">
-      <button id="backBtn" class="secondary" ${currentStep === 0 ? 'disabled' : ''}>Back</button>
-      <button id="nextBtn">${step.hideNext ? 'Start another file' : 'Next'}</button>
+      <button id="backBtn" type="button" class="secondary" ${currentStep === 0 ? 'disabled' : ''}>Back</button>
+      <button id="nextBtn" type="button">${step.hideNext ? 'Start another file' : 'Next'}</button>
     </div>
   `;
 
   ui.stepContainer.innerHTML = '';
   ui.stepContainer.appendChild(shell);
   step.setup?.();
+  wireEnterToNext();
 
   byId('backBtn').onclick = () => {
     if (currentStep === 0) return;
@@ -209,24 +247,30 @@ function renderStep(direction = 'in') {
       resetForNewFile();
       return;
     }
+
     if (!step.valid()) {
-      alert('Just one quick fix before continuing.');
+      ui.inlineError.textContent = step.error || 'Please fix this answer before continuing.';
       return;
     }
+
     currentStep += 1;
     renderStep();
   };
 }
 
 function buildFilename() {
-  const ext = answers.file.name.includes('.') ? `.${answers.file.name.split('.').pop()}` : '';
+  if (!answers.file) return '';
+
+  const ext = extractExtension(answers.file.name);
   const list = [answers.type, answers.project, answers.assembly];
   const includePart = answers.type === 'PRT' || (answers.type === 'NS' && answers.scope === 'single');
   const includeThk = answers.type === 'NS' || answers.type === 'PRT';
+
   if (includePart) list.push(answers.part);
   if (includeThk) list.push(answers.thk);
   list.push(`P${answers.rev}`);
   if (answers.type === 'NS') list.push(answers.cut);
+
   return `${list.join('-')}${ext}`;
 }
 
@@ -238,16 +282,21 @@ function buildPath() {
 }
 
 function persistRecord(generated, savePath) {
-  if (state.lastSaved === generated) return;
-  state.lastSaved = generated;
+  const fullPath = `${savePath}${generated}`;
+  const dedupeKey = `${generated}|${fullPath}`;
+  if (state.lastSaved === dedupeKey) return;
+
+  state.lastSaved = dedupeKey;
   state.lastProject = answers.project;
-  if (answers.type === 'NS') state.cutCounter = Math.max(state.cutCounter, Number(answers.cut.slice(1)) + 1);
-  state.history.unshift({
-    name: generated,
-    path: `${savePath}${generated}`,
-    at: new Date().toISOString()
-  });
-  state.history = state.history.slice(0, 20);
+  if (answers.type === 'NS') {
+    state.cutCounter = Math.max(state.cutCounter, Number(answers.cut.slice(1)) + 1);
+  }
+
+  state.history = [
+    { name: generated, path: fullPath, at: new Date().toISOString() },
+    ...state.history.filter(item => `${item.name}|${item.path}` !== dedupeKey)
+  ].slice(0, 20);
+
   saveState();
   renderHistory();
 }
@@ -258,15 +307,25 @@ function resetForNewFile() {
   answers.rev = 1;
   answers.cut = nextCut(state.cutCounter);
   state.lastSaved = null;
+
   currentStep = 0;
   ui.finalName.textContent = '—';
   ui.finalPath.textContent = '—';
   ui.downloadBtn.classList.add('hidden');
+  ui.downloadBtn.disabled = true;
+  ui.inlineError.textContent = '';
   renderStep();
 }
 
 function renderHistory() {
-  ui.history.innerHTML = state.history.map(item => `<li><strong>${item.name}</strong><br/><span class="tiny">${item.path}</span></li>`).join('');
+  if (!state.history.length) {
+    ui.history.innerHTML = '<li class="tiny">No files renamed yet.</li>';
+    return;
+  }
+
+  ui.history.innerHTML = state.history
+    .map(item => `<li><strong>${item.name}</strong><br/><span class="tiny">${item.path}</span></li>`)
+    .join('');
 }
 
 function loadState() {
@@ -274,9 +333,9 @@ function loadState() {
     const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
     return {
       oneDriveRoot: saved.oneDriveRoot || 'OneDriveRoot',
-      history: saved.history || [],
-      cutCounter: saved.cutCounter || 1,
-      lastProject: saved.lastProject || '1251',
+      history: Array.isArray(saved.history) ? saved.history : [],
+      cutCounter: Number.isInteger(saved.cutCounter) && saved.cutCounter > 0 ? saved.cutCounter : 1,
+      lastProject: /^\d{4}$/.test(saved.lastProject) ? saved.lastProject : '1251',
       lastSaved: null
     };
   } catch {
@@ -285,18 +344,60 @@ function loadState() {
 }
 
 function saveState() {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  localStorage.setItem(
+    STORAGE_KEY,
+    JSON.stringify({
+      oneDriveRoot: state.oneDriveRoot,
+      history: state.history,
+      cutCounter: state.cutCounter,
+      lastProject: state.lastProject
+    })
+  );
 }
 
 function nextCut(n) {
   return `C${String(n).padStart(3, '0')}`;
 }
 
+function normalizeCut(value) {
+  const cleaned = String(value || '').toUpperCase().replace(/\s/g, '').replace(/[^C\d]/g, '');
+  const digits = cleaned.replace(/^C/, '').replace(/\D/g, '').slice(0, 3);
+  return `C${digits.padStart(3, '0')}`;
+}
+
+function extractExtension(filename) {
+  const name = String(filename || '');
+  const lastDot = name.lastIndexOf('.');
+  if (lastDot <= 0 || lastDot === name.length - 1) return '';
+  return name.slice(lastDot);
+}
+
 function byId(id) {
   return document.getElementById(id);
 }
 
+function wireEnterToNext() {
+  const next = byId('nextBtn');
+  const controls = ui.stepContainer.querySelectorAll('input, select');
+  controls.forEach(control => {
+    control.addEventListener('keydown', event => {
+      if (event.key === 'Enter') {
+        event.preventDefault();
+        next?.click();
+      }
+    });
+  });
+}
+
+function formatBytes(bytes) {
+  const value = Number(bytes || 0);
+  if (value < 1024) return `${value} B`;
+  if (value < 1024 * 1024) return `${(value / 1024).toFixed(1)} KB`;
+  return `${(value / (1024 * 1024)).toFixed(1)} MB`;
+}
+
 function downloadRenamed(file, filename) {
+  if (!file) return;
   const url = URL.createObjectURL(file);
   const a = document.createElement('a');
   a.href = url;
