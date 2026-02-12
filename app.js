@@ -1,4 +1,4 @@
-const STORAGE_KEY = 'friendlyFileNamerV2';
+const STORAGE_KEY = 'friendlyFileNamerV3';
 
 const state = loadState();
 const ui = {
@@ -26,6 +26,8 @@ const answers = {
 let currentStep = 0;
 const assemblyChoices = Array.from({ length: 20 }, (_, i) => String(i + 1).padStart(3, '0'));
 const partChoices = Array.from({ length: 25 }, (_, i) => String(51 + i * 2).padStart(3, '0'));
+const typeChoices = ['PRT', 'NS', 'ASY', 'PARENT'];
+const scopeChoices = ['single', 'multi'];
 const thicknessChoices = ['0.25in', '0.125in', '0.063in', '0.025in'];
 
 renderStep();
@@ -36,8 +38,10 @@ function steps() {
     {
       title: 'First, choose your file',
       hint: 'We keep the extension and rename only the filename body.',
-      body: `<label for="fileInput">Upload file<input id="fileInput" type="file" required /></label>
-             <p class="tiny" id="fileMeta">${answers.file ? `${answers.file.name} (${formatBytes(answers.file.size)})` : 'No file selected yet.'}</p>`,
+      body: `
+        <label for="fileInput">Upload file<input id="fileInput" type="file" required /></label>
+        <p class="tiny">${answers.file ? `${answers.file.name} (${formatBytes(answers.file.size)})` : 'No file selected yet.'}</p>
+      `,
       setup: () => {
         const input = byId('fileInput');
         input.onchange = () => {
@@ -50,23 +54,24 @@ function steps() {
     },
     {
       title: 'What is this for?',
-      hint: 'File type controls which naming tokens are included.',
-      body: `<label for="type">Type<select id="type"><option value="PRT">Part (PRT)</option><option value="NS">Nest (NS)</option><option value="ASY">Assembly (ASY)</option></select></label>`,
-      setup: () => {
-        const el = byId('type');
-        el.value = answers.type;
-        el.onchange = () => {
-          answers.type = el.value;
-          if (answers.type !== 'NS') answers.scope = 'single';
-          renderStep();
-        };
-      },
-      valid: () => ['PRT', 'NS', 'ASY'].includes(answers.type),
-      error: 'Please select a valid file type.'
+      hint: 'One click. Type decides which next questions appear.',
+      body: choiceButtons('type', typeChoices, answers.type, {
+        PRT: 'Part',
+        NS: 'Nest',
+        ASY: 'Assembly',
+        PARENT: 'Parent'
+      }),
+      setup: () => setupChoiceButtons('type', value => {
+        answers.type = value;
+        if (answers.type !== 'NS') answers.scope = 'single';
+        renderStep();
+      }),
+      valid: () => typeChoices.includes(answers.type),
+      error: 'Please select a valid type.'
     },
     {
       title: 'What project is this for?',
-      hint: 'Project numbers must be 4 digits.',
+      hint: 'Project number is exactly 4 digits.',
       body: `<label for="project">Project #<input id="project" value="${answers.project}" maxlength="4" inputmode="numeric" placeholder="1251" /></label>`,
       setup: () => {
         const el = byId('project');
@@ -76,11 +81,11 @@ function steps() {
         };
       },
       valid: () => /^\d{4}$/.test(answers.project),
-      error: 'Project must be exactly 4 digits (example: 1251).'
+      error: 'Project must be exactly 4 digits.'
     },
     {
       title: 'Pick an assembly number',
-      hint: 'Assembly is always included as ASY-### in path and name.',
+      hint: 'Dropdown kept for quick list scanning.',
       body: `<label for="assembly">Assembly<select id="assembly">${assemblyChoices.map(a => `<option value="${a}">${a}</option>`).join('')}</select></label>`,
       setup: () => {
         const el = byId('assembly');
@@ -102,25 +107,25 @@ function steps() {
 function nestScopeStep() {
   if (answers.type !== 'NS') return null;
   return {
-    title: 'Is this nest for one part or many?',
-    hint: 'Multi-part nests skip the part token.',
-    body: `<label for="scope">Nest scope<select id="scope"><option value="single">Single part</option><option value="multi">Multi-part (assembly-level)</option></select></label>`,
-    setup: () => {
-      const el = byId('scope');
-      el.value = answers.scope;
-      el.onchange = () => (answers.scope = el.value);
-    },
-    valid: () => ['single', 'multi'].includes(answers.scope),
-    error: 'Please choose single-part or multi-part.'
+    title: 'Nest scope',
+    hint: 'Single-part includes part token. Multi-part skips part token.',
+    body: choiceButtons('scope', scopeChoices, answers.scope, {
+      single: 'Single part',
+      multi: 'Multi-part'
+    }),
+    setup: () => setupChoiceButtons('scope', value => (answers.scope = value)),
+    valid: () => scopeChoices.includes(answers.scope),
+    error: 'Pick single-part or multi-part.'
   };
 }
 
 function partStep() {
   const needed = answers.type === 'PRT' || (answers.type === 'NS' && answers.scope === 'single');
   if (!needed) return null;
+
   return {
     title: 'Pick a part number',
-    hint: 'Odd series starts at 051 to match your standard.',
+    hint: 'Dropdown kept here by request.',
     body: `<label for="part">Part<select id="part">${partChoices.map(p => `<option value="${p}">${p}</option>`).join('')}</select></label>`,
     setup: () => {
       const el = byId('part');
@@ -133,17 +138,14 @@ function partStep() {
 }
 
 function thicknessStep() {
-  const needed = answers.type === 'NS' || answers.type === 'PRT';
+  const needed = answers.type === 'PRT' || answers.type === 'NS';
   if (!needed) return null;
+
   return {
-    title: 'What thickness should we use?',
-    hint: 'Thickness becomes a filename token (for PRT/NS only).',
-    body: `<label for="thk">Thickness<select id="thk">${thicknessChoices.map(t => `<option value="${t}">${t}</option>`).join('')}</select></label>`,
-    setup: () => {
-      const el = byId('thk');
-      el.value = answers.thk;
-      el.onchange = () => (answers.thk = el.value);
-    },
+    title: 'Choose thickness',
+    hint: 'One click chip, no dropdown.',
+    body: choiceButtons('thk', thicknessChoices, answers.thk),
+    setup: () => setupChoiceButtons('thk', value => (answers.thk = value)),
     valid: () => thicknessChoices.includes(answers.thk),
     error: 'Please choose a thickness.'
   };
@@ -151,8 +153,8 @@ function thicknessStep() {
 
 function revisionStep() {
   return {
-    title: 'Revision number?',
-    hint: 'Enter a positive whole number. We add P automatically.',
+    title: 'Revision number',
+    hint: 'Positive whole number only (we add P automatically).',
     body: `<label for="rev">Revision<input id="rev" type="number" min="1" step="1" value="${answers.rev}" /></label>`,
     setup: () => {
       const el = byId('rev');
@@ -167,9 +169,10 @@ function revisionStep() {
 
 function cutStep() {
   if (answers.type !== 'NS') return null;
+
   return {
     title: 'Cut number',
-    hint: 'Required format is C### (example: C001).',
+    hint: 'Format: C###. We auto-format as you type.',
     body: `<label for="cut">Cut<input id="cut" value="${answers.cut}" placeholder="C001" /></label>`,
     setup: () => {
       const el = byId('cut');
@@ -183,7 +186,7 @@ function cutStep() {
       };
     },
     valid: () => /^C\d{3}$/.test(answers.cut),
-    error: 'Cut must be in C### format (example: C007).'
+    error: 'Cut must be C### (example C007).'
   };
 }
 
@@ -191,12 +194,14 @@ function reviewStep() {
   const generated = buildFilename();
   const savePath = buildPath();
   const hasFile = Boolean(answers.file);
+  const clickableText = randomNote();
+
   return {
-    title: 'Review and save',
-    hint: 'Use Back to tweak anything, or download your renamed copy.',
+    title: 'Looks great ✨',
+    hint: clickableText,
     body: hasFile
       ? `<p><strong>${generated}</strong></p><p class="tiny">${savePath}${generated}</p>`
-      : '<p class="tiny">Missing file information. Go back and upload a file.</p>',
+      : '<p class="tiny">Missing file upload. Go back to step 1.</p>',
     setup: () => {
       ui.finalName.textContent = hasFile ? generated : '—';
       ui.finalPath.textContent = hasFile ? `${savePath}${generated}` : '—';
@@ -258,13 +263,40 @@ function renderStep() {
   };
 }
 
+function choiceButtons(name, options, selected, labels = {}) {
+  return `
+    <div class="choice-group" role="radiogroup" aria-label="${name}">
+      ${options
+        .map(
+          option => `<button type="button" class="choice ${selected === option ? 'active' : ''}" data-choice="${name}" data-value="${option}" aria-pressed="${selected === option}">${labels[option] || option}</button>`
+        )
+        .join('')}
+    </div>
+  `;
+}
+
+function setupChoiceButtons(name, onPick) {
+  ui.stepContainer.querySelectorAll(`[data-choice="${name}"]`).forEach(button => {
+    button.addEventListener('click', () => {
+      onPick(button.dataset.value);
+      ui.stepContainer
+        .querySelectorAll(`[data-choice="${name}"]`)
+        .forEach(btn => {
+          const active = btn === button;
+          btn.classList.toggle('active', active);
+          btn.setAttribute('aria-pressed', String(active));
+        });
+    });
+  });
+}
+
 function buildFilename() {
   if (!answers.file) return '';
 
   const ext = extractExtension(answers.file.name);
   const list = [answers.type, answers.project, answers.assembly];
   const includePart = answers.type === 'PRT' || (answers.type === 'NS' && answers.scope === 'single');
-  const includeThk = answers.type === 'NS' || answers.type === 'PRT';
+  const includeThk = answers.type === 'PRT' || answers.type === 'NS';
 
   if (includePart) list.push(answers.part);
   if (includeThk) list.push(answers.thk);
@@ -278,6 +310,7 @@ function buildPath() {
   const base = `${state.oneDriveRoot}/Projects/${answers.project}/ASY-${answers.assembly}/`;
   if (answers.type === 'PRT') return `${base}Parts/`;
   if (answers.type === 'NS') return `${base}Nests/`;
+  if (answers.type === 'PARENT') return `${base}Parent/`;
   return `${base}CAD/`;
 }
 
@@ -372,10 +405,6 @@ function extractExtension(filename) {
   return name.slice(lastDot);
 }
 
-function byId(id) {
-  return document.getElementById(id);
-}
-
 function wireEnterToNext() {
   const next = byId('nextBtn');
   const controls = ui.stepContainer.querySelectorAll('input, select');
@@ -389,11 +418,24 @@ function wireEnterToNext() {
   });
 }
 
+function randomNote() {
+  const notes = [
+    'Nice click-flow. Want to tweak anything before download?',
+    'Quick and clean ✨ You can still go back and adjust.',
+    'All tokens look valid. Save when ready.'
+  ];
+  return notes[Math.floor(Math.random() * notes.length)];
+}
+
 function formatBytes(bytes) {
   const value = Number(bytes || 0);
   if (value < 1024) return `${value} B`;
   if (value < 1024 * 1024) return `${(value / 1024).toFixed(1)} KB`;
   return `${(value / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function byId(id) {
+  return document.getElementById(id);
 }
 
 function downloadRenamed(file, filename) {
