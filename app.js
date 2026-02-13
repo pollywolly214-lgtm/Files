@@ -32,6 +32,10 @@ const scopeChoices = ['single', 'multi'];
 const assemblyModeChoices = ['2D', '3D'];
 const commonThicknessLabels = ['1/8in', '3/16in', '1/4in', '3/8in', '1/2in'];
 const allThicknessChoices = buildThicknessChoices();
+const previewableExtensions = new Set(['.dxf', '.ord', '.omx', '.svg']);
+const previewState = {
+  objectUrl: null
+};
 
 renderStep();
 renderHistory();
@@ -53,17 +57,23 @@ function steps() {
 }
 
 function fileStep() {
+  const preview = filePreviewMarkup(answers.file);
   return {
     title: 'First, choose your file',
     hint: 'We keep the extension and rename only the filename body.',
     body: `
       <label for="fileInput">Upload file<input id="fileInput" type="file" required /></label>
       <p class="tiny">${answers.file ? `${answers.file.name} (${formatBytes(answers.file.size)})` : 'No file selected yet.'}</p>
+      ${preview ? `<div class="file-preview-wrap">${preview}</div>` : ''}
     `,
     setup: () => {
       const input = byId('fileInput');
-      input.onchange = () => {
+      input.onchange = async () => {
+        releasePreviewObjectUrl();
         answers.file = input.files?.[0] || null;
+        if (answers.file) {
+          await preparePreviewData(answers.file);
+        }
         renderStep();
       };
     },
@@ -426,6 +436,7 @@ function persistRecord(generated, savePath) {
 }
 
 function resetForNewFile() {
+  releasePreviewObjectUrl();
   answers.file = null;
   answers.assemblyMode = '3D';
   answers.scope = 'single';
@@ -577,6 +588,55 @@ function extractExtension(filename) {
   const lastDot = name.lastIndexOf('.');
   if (lastDot <= 0 || lastDot === name.length - 1) return '';
   return name.slice(lastDot);
+}
+
+function filePreviewMarkup(file) {
+  if (!file || !file.preview) return '';
+
+  const { mode, content } = file.preview;
+  if (mode === 'svg') {
+    return `<p class="tiny preview-title">Quick preview</p><div class="file-preview-pop"><img src="${content}" alt="Preview of ${file.name}" /></div>`;
+  }
+
+  if (mode === 'text') {
+    return `<p class="tiny preview-title">Quick preview</p><div class="file-preview-pop"><pre>${escapeHtml(content)}</pre></div>`;
+  }
+
+  return '';
+}
+
+async function preparePreviewData(file) {
+  const ext = extractExtension(file.name).toLowerCase();
+  if (!previewableExtensions.has(ext)) {
+    file.preview = null;
+    return;
+  }
+
+  if (ext === '.svg') {
+    previewState.objectUrl = URL.createObjectURL(file);
+    file.preview = { mode: 'svg', content: previewState.objectUrl };
+    return;
+  }
+
+  const content = await file.text();
+  const firstLines = content.split(/\r?\n/).slice(0, 18).join('\n');
+  file.preview = {
+    mode: 'text',
+    content: firstLines || '(File is empty.)'
+  };
+}
+
+function releasePreviewObjectUrl() {
+  if (!previewState.objectUrl) return;
+  URL.revokeObjectURL(previewState.objectUrl);
+  previewState.objectUrl = null;
+}
+
+function escapeHtml(value) {
+  return String(value || '')
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;');
 }
 
 function wireEnterToNext() {
