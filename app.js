@@ -302,9 +302,8 @@ function renderStep() {
   ui.progressText.textContent = `Step ${currentStep + 1} of ${flow.length}`;
   ui.inlineError.textContent = '';
 
-  const nextButton = step.autoAdvance && !step.hideNext
-    ? ''
-    : `<button id="nextBtn" type="button">${step.hideNext ? 'Start another file' : 'Next'}</button>`;
+  const autoAdvanceStep = step.autoAdvance && !step.hideNext;
+  const nextButton = `<button id="nextBtn" type="button" class="${autoAdvanceStep ? 'ghost' : ''}" ${autoAdvanceStep ? 'disabled aria-hidden="true" tabindex="-1"' : ''}>${step.hideNext ? 'Start another file' : 'Next'}</button>`;
 
   const shell = document.createElement('div');
   shell.className = 'step';

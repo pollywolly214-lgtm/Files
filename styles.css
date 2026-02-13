@@ -35,9 +35,12 @@ h1 { margin-bottom: 0.25rem; }
 .progress { color: var(--muted); font-size: 0.92rem; margin: 0 0 0.4rem; }
 .error { color: var(--danger); min-height: 1.25rem; margin: 0 0 0.45rem; font-size: 0.9rem; }
 
-.step-shell { min-height: 250px; position: relative; }
+.step-shell { min-height: 330px; position: relative; }
 .step {
   animation: fadeIn .25s ease;
+  min-height: 330px;
+  position: relative;
+  padding-bottom: 3.25rem;
 }
 
 @keyframes fadeIn {
@@ -96,7 +99,9 @@ button:disabled { opacity: 0.6; cursor: not-allowed; transform: none; box-shadow
   box-shadow: 0 8px 18px rgba(90, 103, 255, 0.22);
 }
 
-.row { display: grid; grid-template-columns: 1fr 1fr; gap: 0.6rem; margin-top: 0.85rem; }
+.row { display: grid; grid-template-columns: 1fr 1fr; gap: 0.6rem; position: absolute; left: 0; right: 0; bottom: 0; }
+
+button.ghost { visibility: hidden; pointer-events: none; }
 
 .tiny { color: var(--muted); font-size: 0.9rem; }
 #finalName { font-weight: 700; word-break: break-all; }
