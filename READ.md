@@ -4,13 +4,13 @@ A simple static wizard for naming uploaded files using your Project → ASY → 
 
 ## Functional flow (click-minimized)
 1. Upload file.
-2. Pick type with one-click chips: `PRT`, `NS`, `ASY`, or `PARENT`.
+2. Pick type with one-click chips: `PRT`, `NS`, `ASY`, or `PARENT` (auto-advances).
 3. Enter 4-digit project.
 4. Pick assembly (dropdown).
-5. If type is `ASY`, pick assembly mode:
+5. If type is `ASY`, pick assembly mode (auto-advances):
    - `2D` requires thickness
    - `3D` skips thickness
-6. If type is `NS`, choose nest scope with one-click chips.
+6. If type is `NS`, choose nest scope with one-click chips (auto-advances).
 7. If needed, pick part number (dropdown).
 8. If needed (`PRT`, `NS`, and `ASY` `2D`), choose thickness:
    - quick-pick common values: `1/8`, `3/16`, `1/4`, `3/8`, `1/2`

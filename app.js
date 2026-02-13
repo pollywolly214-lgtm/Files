@@ -86,9 +86,10 @@ function typeStep() {
       answers.type = value;
       if (answers.type !== 'NS') answers.scope = 'single';
       if (answers.type !== 'ASY') answers.assemblyMode = '3D';
-    }),
+    }, { autoNext: true }),
     valid: () => typeChoices.includes(answers.type),
-    error: 'Please select a valid type.'
+    error: 'Please select a valid type.',
+    autoAdvance: true
   };
 }
 
@@ -130,9 +131,10 @@ function assemblyModeStep() {
     title: 'Assembly type',
     hint: '2D assemblies require thickness. 3D assemblies skip thickness.',
     body: choiceButtons('assemblyMode', assemblyModeChoices, answers.assemblyMode),
-    setup: () => setupChoiceButtons('assemblyMode', value => (answers.assemblyMode = value)),
+    setup: () => setupChoiceButtons('assemblyMode', value => (answers.assemblyMode = value), { autoNext: true }),
     valid: () => assemblyModeChoices.includes(answers.assemblyMode),
-    error: 'Choose 2D or 3D assembly.'
+    error: 'Choose 2D or 3D assembly.',
+    autoAdvance: true
   };
 }
 
@@ -145,9 +147,10 @@ function nestScopeStep() {
       single: 'Single part',
       multi: 'Multi-part'
     }),
-    setup: () => setupChoiceButtons('scope', value => (answers.scope = value)),
+    setup: () => setupChoiceButtons('scope', value => (answers.scope = value), { autoNext: true }),
     valid: () => scopeChoices.includes(answers.scope),
-    error: 'Pick single-part or multi-part.'
+    error: 'Pick single-part or multi-part.',
+    autoAdvance: true
   };
 }
 
@@ -191,7 +194,7 @@ function thicknessStep() {
         answers.thk = value;
         const input = byId('thkInput');
         if (input) input.value = value;
-      });
+      }, { autoNext: true });
       const input = byId('thkInput');
       input.oninput = () => {
         answers.thk = normalizeThickness(input.value);
@@ -281,6 +284,10 @@ function renderStep() {
   ui.progressText.textContent = `Step ${currentStep + 1} of ${flow.length}`;
   ui.inlineError.textContent = '';
 
+  const nextButton = step.autoAdvance && !step.hideNext
+    ? ''
+    : `<button id="nextBtn" type="button">${step.hideNext ? 'Start another file' : 'Next'}</button>`;
+
   const shell = document.createElement('div');
   shell.className = 'step';
   shell.innerHTML = `
@@ -289,7 +296,7 @@ function renderStep() {
     ${step.body}
     <div class="row">
       <button id="backBtn" type="button" class="secondary" ${currentStep === 0 ? 'disabled' : ''}>Back</button>
-      <button id="nextBtn" type="button">${step.hideNext ? 'Start another file' : 'Next'}</button>
+      ${nextButton}
     </div>
   `;
 
@@ -304,7 +311,8 @@ function renderStep() {
     renderStep();
   };
 
-  byId('nextBtn').onclick = () => {
+  const nextBtn = byId('nextBtn');
+  if (nextBtn) nextBtn.onclick = () => {
     if (step.hideNext) {
       resetForNewFile();
       return;
@@ -320,6 +328,11 @@ function renderStep() {
   };
 }
 
+function goToNextStep() {
+  currentStep += 1;
+  renderStep();
+}
+
 function choiceButtons(name, options, selected, labels = {}) {
   return `
     <div class="choice-group" role="radiogroup" aria-label="${name}">
@@ -332,7 +345,7 @@ function choiceButtons(name, options, selected, labels = {}) {
   `;
 }
 
-function setupChoiceButtons(name, onPick) {
+function setupChoiceButtons(name, onPick, options = {}) {
   ui.stepContainer.querySelectorAll(`[data-choice="${name}"]`).forEach(button => {
     button.addEventListener('click', () => {
       onPick(button.dataset.value);
@@ -343,6 +356,10 @@ function setupChoiceButtons(name, onPick) {
           btn.classList.toggle('active', active);
           btn.setAttribute('aria-pressed', String(active));
         });
+
+      if (options.autoNext) {
+        goToNextStep();
+      }
     });
   });
 }
@@ -500,6 +517,7 @@ function extractExtension(filename) {
 
 function wireEnterToNext() {
   const next = byId('nextBtn');
+  if (!next) return;
   const controls = ui.stepContainer.querySelectorAll('input, select');
   controls.forEach(control => {
     control.addEventListener('keydown', event => {
