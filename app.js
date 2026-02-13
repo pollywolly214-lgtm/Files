@@ -1,4 +1,4 @@
-const STORAGE_KEY = 'friendlyFileNamerV3';
+const STORAGE_KEY = 'friendlyFileNamerV4';
 
 const state = loadState();
 const ui = {
@@ -16,9 +16,10 @@ const answers = {
   type: 'PRT',
   project: state.lastProject || '1251',
   assembly: '001',
+  assemblyMode: '3D',
   scope: 'single',
   part: '051',
-  thk: '0.25in',
+  thk: '1/4in',
   rev: 1,
   cut: nextCut(state.cutCounter)
 };
@@ -28,72 +29,20 @@ const assemblyChoices = Array.from({ length: 20 }, (_, i) => String(i + 1).padSt
 const partChoices = Array.from({ length: 25 }, (_, i) => String(51 + i * 2).padStart(3, '0'));
 const typeChoices = ['PRT', 'NS', 'ASY', 'PARENT'];
 const scopeChoices = ['single', 'multi'];
-const thicknessChoices = ['0.25in', '0.125in', '0.063in', '0.025in'];
+const assemblyModeChoices = ['2D', '3D'];
+const commonThicknesses = ['1/8in', '3/16in', '1/4in', '3/8in', '1/2in'];
+const allThicknessChoices = buildThicknessChoices();
 
 renderStep();
 renderHistory();
 
 function steps() {
   return [
-    {
-      title: 'First, choose your file',
-      hint: 'We keep the extension and rename only the filename body.',
-      body: `
-        <label for="fileInput">Upload file<input id="fileInput" type="file" required /></label>
-        <p class="tiny">${answers.file ? `${answers.file.name} (${formatBytes(answers.file.size)})` : 'No file selected yet.'}</p>
-      `,
-      setup: () => {
-        const input = byId('fileInput');
-        input.onchange = () => {
-          answers.file = input.files?.[0] || null;
-          renderStep();
-        };
-      },
-      valid: () => Boolean(answers.file),
-      error: 'Please choose a file to continue.'
-    },
-    {
-      title: 'What is this for?',
-      hint: 'One click. Type decides which next questions appear.',
-      body: choiceButtons('type', typeChoices, answers.type, {
-        PRT: 'Part',
-        NS: 'Nest',
-        ASY: 'Assembly',
-        PARENT: 'Parent'
-      }),
-      setup: () => setupChoiceButtons('type', value => {
-        answers.type = value;
-        if (answers.type !== 'NS') answers.scope = 'single';
-      }),
-      valid: () => typeChoices.includes(answers.type),
-      error: 'Please select a valid type.'
-    },
-    {
-      title: 'What project is this for?',
-      hint: 'Project number is exactly 4 digits.',
-      body: `<label for="project">Project #<input id="project" value="${answers.project}" maxlength="4" inputmode="numeric" placeholder="1251" /></label>`,
-      setup: () => {
-        const el = byId('project');
-        el.oninput = () => {
-          answers.project = el.value.replace(/\D/g, '').slice(0, 4);
-          el.value = answers.project;
-        };
-      },
-      valid: () => /^\d{4}$/.test(answers.project),
-      error: 'Project must be exactly 4 digits.'
-    },
-    {
-      title: 'Pick an assembly number',
-      hint: 'Dropdown kept for quick list scanning.',
-      body: `<label for="assembly">Assembly<select id="assembly">${assemblyChoices.map(a => `<option value="${a}">${a}</option>`).join('')}</select></label>`,
-      setup: () => {
-        const el = byId('assembly');
-        el.value = answers.assembly;
-        el.onchange = () => (answers.assembly = el.value);
-      },
-      valid: () => assemblyChoices.includes(answers.assembly),
-      error: 'Please choose an assembly number.'
-    },
+    fileStep(),
+    typeStep(),
+    projectStep(),
+    assemblyStep(),
+    assemblyModeStep(),
     nestScopeStep(),
     partStep(),
     thicknessStep(),
@@ -101,6 +50,90 @@ function steps() {
     cutStep(),
     reviewStep()
   ].filter(Boolean);
+}
+
+function fileStep() {
+  return {
+    title: 'First, choose your file',
+    hint: 'We keep the extension and rename only the filename body.',
+    body: `
+      <label for="fileInput">Upload file<input id="fileInput" type="file" required /></label>
+      <p class="tiny">${answers.file ? `${answers.file.name} (${formatBytes(answers.file.size)})` : 'No file selected yet.'}</p>
+    `,
+    setup: () => {
+      const input = byId('fileInput');
+      input.onchange = () => {
+        answers.file = input.files?.[0] || null;
+        renderStep();
+      };
+    },
+    valid: () => Boolean(answers.file),
+    error: 'Please choose a file to continue.'
+  };
+}
+
+function typeStep() {
+  return {
+    title: 'What is this for?',
+    hint: 'One click. Type decides which next questions appear.',
+    body: choiceButtons('type', typeChoices, answers.type, {
+      PRT: 'Part',
+      NS: 'Nest',
+      ASY: 'Assembly',
+      PARENT: 'Parent'
+    }),
+    setup: () => setupChoiceButtons('type', value => {
+      answers.type = value;
+      if (answers.type !== 'NS') answers.scope = 'single';
+      if (answers.type !== 'ASY') answers.assemblyMode = '3D';
+    }),
+    valid: () => typeChoices.includes(answers.type),
+    error: 'Please select a valid type.'
+  };
+}
+
+function projectStep() {
+  return {
+    title: 'What project is this for?',
+    hint: 'Project number is exactly 4 digits.',
+    body: `<label for="project">Project #<input id="project" value="${answers.project}" maxlength="4" inputmode="numeric" placeholder="1251" /></label>`,
+    setup: () => {
+      const el = byId('project');
+      el.oninput = () => {
+        answers.project = el.value.replace(/\D/g, '').slice(0, 4);
+        el.value = answers.project;
+      };
+    },
+    valid: () => /^\d{4}$/.test(answers.project),
+    error: 'Project must be exactly 4 digits.'
+  };
+}
+
+function assemblyStep() {
+  return {
+    title: 'Pick an assembly number',
+    hint: 'Dropdown kept for quick list scanning.',
+    body: `<label for="assembly">Assembly<select id="assembly">${assemblyChoices.map(a => `<option value="${a}">${a}</option>`).join('')}</select></label>`,
+    setup: () => {
+      const el = byId('assembly');
+      el.value = answers.assembly;
+      el.onchange = () => (answers.assembly = el.value);
+    },
+    valid: () => assemblyChoices.includes(answers.assembly),
+    error: 'Please choose an assembly number.'
+  };
+}
+
+function assemblyModeStep() {
+  if (answers.type !== 'ASY') return null;
+  return {
+    title: 'Assembly type',
+    hint: '2D assemblies require thickness. 3D assemblies skip thickness.',
+    body: choiceButtons('assemblyMode', assemblyModeChoices, answers.assemblyMode),
+    setup: () => setupChoiceButtons('assemblyMode', value => (answers.assemblyMode = value)),
+    valid: () => assemblyModeChoices.includes(answers.assemblyMode),
+    error: 'Choose 2D or 3D assembly.'
+  };
 }
 
 function nestScopeStep() {
@@ -137,16 +170,42 @@ function partStep() {
 }
 
 function thicknessStep() {
-  const needed = answers.type === 'PRT' || answers.type === 'NS';
+  const needed = answers.type === 'PRT' || answers.type === 'NS' || (answers.type === 'ASY' && answers.assemblyMode === '2D');
   if (!needed) return null;
 
   return {
     title: 'Choose thickness',
-    hint: 'One click chip, no dropdown.',
-    body: choiceButtons('thk', thicknessChoices, answers.thk),
-    setup: () => setupChoiceButtons('thk', value => (answers.thk = value)),
-    valid: () => thicknessChoices.includes(answers.thk),
-    error: 'Please choose a thickness.'
+    hint: 'Quick picks on top. Full range from gauge sheet to 2in below.',
+    body: `
+      <p class="tiny">Most common:</p>
+      ${choiceButtons('thkCommon', commonThicknesses, answers.thk)}
+      <label for="thkInput">Or choose any thickness
+        <input id="thkInput" list="thicknessList" value="${answers.thk}" placeholder="1/4in" />
+      </label>
+      <datalist id="thicknessList">
+        ${allThicknessChoices.map(t => `<option value="${t}"></option>`).join('')}
+      </datalist>
+    `,
+    setup: () => {
+      setupChoiceButtons('thkCommon', value => {
+        answers.thk = value;
+        const input = byId('thkInput');
+        if (input) input.value = value;
+      });
+      const input = byId('thkInput');
+      input.oninput = () => {
+        answers.thk = normalizeThickness(input.value);
+        input.value = answers.thk;
+      };
+      input.onblur = () => {
+        if (!allThicknessChoices.includes(answers.thk)) {
+          answers.thk = commonThicknesses[2];
+          input.value = answers.thk;
+        }
+      };
+    },
+    valid: () => allThicknessChoices.includes(answers.thk),
+    error: 'Choose a valid thickness from the list.'
   };
 }
 
@@ -193,11 +252,10 @@ function reviewStep() {
   const generated = buildFilename();
   const savePath = buildPath();
   const hasFile = Boolean(answers.file);
-  const clickableText = randomNote();
 
   return {
     title: 'Looks great ✨',
-    hint: clickableText,
+    hint: randomNote(),
     body: hasFile
       ? `<p><strong>${generated}</strong></p><p class="tiny">${savePath}${generated}</p>`
       : '<p class="tiny">Missing file upload. Go back to step 1.</p>',
@@ -295,7 +353,7 @@ function buildFilename() {
   const ext = extractExtension(answers.file.name);
   const list = [answers.type, answers.project, answers.assembly];
   const includePart = answers.type === 'PRT' || (answers.type === 'NS' && answers.scope === 'single');
-  const includeThk = answers.type === 'PRT' || answers.type === 'NS';
+  const includeThk = answers.type === 'PRT' || answers.type === 'NS' || (answers.type === 'ASY' && answers.assemblyMode === '2D');
 
   if (includePart) list.push(answers.part);
   if (includeThk) list.push(answers.thk);
@@ -335,6 +393,7 @@ function persistRecord(generated, savePath) {
 
 function resetForNewFile() {
   answers.file = null;
+  answers.assemblyMode = '3D';
   answers.scope = 'single';
   answers.rev = 1;
   answers.cut = nextCut(state.cutCounter);
@@ -395,6 +454,41 @@ function normalizeCut(value) {
   const cleaned = String(value || '').toUpperCase().replace(/\s/g, '').replace(/[^C\d]/g, '');
   const digits = cleaned.replace(/^C/, '').replace(/\D/g, '').slice(0, 3);
   return `C${digits.padStart(3, '0')}`;
+}
+
+function buildThicknessChoices() {
+  const top = ['Gauge Sheet'];
+  const increments = [];
+  for (let i = 1; i <= 32; i += 1) {
+    increments.push(formatSixteenth(i));
+  }
+  const unique = new Set([...top, ...commonThicknesses, ...increments]);
+  return Array.from(unique);
+}
+
+function formatSixteenth(i) {
+  const whole = Math.floor(i / 16);
+  const remainder = i % 16;
+  if (remainder === 0) return `${whole}in`;
+  const g = gcd(remainder, 16);
+  const num = remainder / g;
+  const den = 16 / g;
+  if (whole === 0) return `${num}/${den}in`;
+  return `${whole}-${num}/${den}in`;
+}
+
+function normalizeThickness(value) {
+  const raw = String(value || '').trim().toLowerCase();
+  if (!raw) return '';
+  if (raw.includes('gauge')) return 'Gauge Sheet';
+  const compact = raw.replace(/\s+/g, '');
+  const direct = allThicknessChoices.find(option => option.toLowerCase() === compact);
+  return direct || value;
+}
+
+function gcd(a, b) {
+  if (!b) return a;
+  return gcd(b, a % b);
 }
 
 function extractExtension(filename) {
