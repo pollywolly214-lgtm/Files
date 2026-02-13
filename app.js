@@ -19,7 +19,7 @@ const answers = {
   assemblyMode: '3D',
   scope: 'single',
   part: '051',
-  thk: '1/4in',
+  thk: formatThicknessDecimal(0.25),
   rev: 1,
   cut: nextCut(state.cutCounter)
 };
@@ -30,7 +30,8 @@ const partChoices = Array.from({ length: 25 }, (_, i) => String(51 + i * 2).padS
 const typeChoices = ['PRT', 'NS', 'ASY', 'PARENT'];
 const scopeChoices = ['single', 'multi'];
 const assemblyModeChoices = ['2D', '3D'];
-const commonThicknesses = ['1/8in', '3/16in', '1/4in', '3/8in', '1/2in'];
+const commonThicknessLabels = ['1/8in', '3/16in', '1/4in', '3/8in', '1/2in'];
+const commonThicknessMap = buildCommonThicknessMap();
 const allThicknessChoices = buildThicknessChoices();
 
 renderStep();
@@ -178,33 +179,28 @@ function thicknessStep() {
 
   return {
     title: 'Choose thickness',
-    hint: 'Quick picks on top. Full range from gauge sheet to 2in below.',
+    hint: 'Quick picks on top. Full list from gauge sheet to 2in below.',
     body: `
       <p class="tiny">Most common:</p>
-      ${choiceButtons('thkCommon', commonThicknesses, answers.thk)}
-      <label for="thkInput">Or choose any thickness
-        <input id="thkInput" list="thicknessList" value="${answers.thk}" placeholder="1/4in" />
+      ${choiceButtons('thkCommon', commonThicknessLabels, thicknessLabelFromValue(answers.thk), {
+        '1/8in': '1/8in',
+        '3/16in': '3/16in',
+        '1/4in': '1/4in',
+        '3/8in': '3/8in',
+        '1/2in': '1/2in'
+      })}
+      <label for="thkAny">Any thickness (full list)
+        <select id="thkAny">${allThicknessChoices.map(t => `<option value="${t}" ${t === answers.thk ? 'selected' : ''}>${t}</option>`).join('')}</select>
       </label>
-      <datalist id="thicknessList">
-        ${allThicknessChoices.map(t => `<option value="${t}"></option>`).join('')}
-      </datalist>
     `,
     setup: () => {
-      setupChoiceButtons('thkCommon', value => {
-        answers.thk = value;
-        const input = byId('thkInput');
-        if (input) input.value = value;
+      setupChoiceButtons('thkCommon', label => {
+        answers.thk = commonThicknessMap[label] || answers.thk;
       }, { autoNext: true });
-      const input = byId('thkInput');
-      input.oninput = () => {
-        answers.thk = normalizeThickness(input.value);
-        input.value = answers.thk;
-      };
-      input.onblur = () => {
-        if (!allThicknessChoices.includes(answers.thk)) {
-          answers.thk = commonThicknesses[2];
-          input.value = answers.thk;
-        }
+
+      const any = byId('thkAny');
+      any.onchange = () => {
+        answers.thk = normalizeThickness(any.value);
       };
     },
     valid: () => allThicknessChoices.includes(answers.thk),
@@ -473,39 +469,74 @@ function normalizeCut(value) {
   return `C${digits.padStart(3, '0')}`;
 }
 
-function buildThicknessChoices() {
-  const top = ['Gauge Sheet'];
-  const increments = [];
-  for (let i = 1; i <= 32; i += 1) {
-    increments.push(formatSixteenth(i));
-  }
-  const unique = new Set([...top, ...commonThicknesses, ...increments]);
-  return Array.from(unique);
+function buildCommonThicknessMap() {
+  return {
+    '1/8in': formatThicknessDecimal(1 / 8),
+    '3/16in': formatThicknessDecimal(3 / 16),
+    '1/4in': formatThicknessDecimal(1 / 4),
+    '3/8in': formatThicknessDecimal(3 / 8),
+    '1/2in': formatThicknessDecimal(1 / 2)
+  };
 }
 
-function formatSixteenth(i) {
-  const whole = Math.floor(i / 16);
-  const remainder = i % 16;
-  if (remainder === 0) return `${whole}in`;
-  const g = gcd(remainder, 16);
-  const num = remainder / g;
-  const den = 16 / g;
-  if (whole === 0) return `${num}/${den}in`;
-  return `${whole}-${num}/${den}in`;
+function thicknessLabelFromValue(value) {
+  const hit = Object.entries(commonThicknessMap).find(([, decimal]) => decimal === value);
+  return hit ? hit[0] : '';
+}
+
+function buildThicknessChoices() {
+  const list = ['Gauge Sheet'];
+  for (let i = 1; i <= 32; i += 1) {
+    list.push(formatThicknessDecimal(i / 16));
+  }
+  return Array.from(new Set(list));
 }
 
 function normalizeThickness(value) {
-  const raw = String(value || '').trim().toLowerCase();
+  const raw = String(value || '').trim();
   if (!raw) return '';
-  if (raw.includes('gauge')) return 'Gauge Sheet';
-  const compact = raw.replace(/\s+/g, '');
-  const direct = allThicknessChoices.find(option => option.toLowerCase() === compact);
-  return direct || value;
+  if (/gauge/i.test(raw)) return 'Gauge Sheet';
+
+  const numeric = parseThicknessToInches(raw);
+  if (numeric == null) return value;
+  return formatThicknessDecimal(numeric);
 }
 
-function gcd(a, b) {
-  if (!b) return a;
-  return gcd(b, a % b);
+function parseThicknessToInches(raw) {
+  const text = raw.toLowerCase().replace(/in|"/g, '').trim();
+  if (!text) return null;
+
+  if (/^\d*\.?\d+$/.test(text)) {
+    return Number(text);
+  }
+
+  if (/^\d+-\d+\/\d+$/.test(text)) {
+    const [whole, frac] = text.split('-');
+    const [num, den] = frac.split('/').map(Number);
+    if (!den) return null;
+    return Number(whole) + (num / den);
+  }
+
+  if (/^\d+\/\d+$/.test(text)) {
+    const [num, den] = text.split('/').map(Number);
+    if (!den) return null;
+    return num / den;
+  }
+
+  return null;
+}
+
+function formatThicknessDecimal(inches) {
+  if (!Number.isFinite(inches)) return '';
+  let text = inches.toFixed(3).replace(/0+$/, '').replace(/\.$/, '');
+  const dot = text.indexOf('.');
+  if (dot === -1) {
+    text = `${text}.00`;
+  } else {
+    const decimals = text.length - dot - 1;
+    if (decimals === 1) text = `${text}0`;
+  }
+  return `${text}in`;
 }
 
 function extractExtension(filename) {
