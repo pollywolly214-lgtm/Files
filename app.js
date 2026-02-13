@@ -32,6 +32,10 @@ const scopeChoices = ['single', 'multi'];
 const assemblyModeChoices = ['2D', '3D'];
 const commonThicknessLabels = ['1/8in', '3/16in', '1/4in', '3/8in', '1/2in'];
 const allThicknessChoices = buildThicknessChoices();
+const previewableExtensions = new Set(['.dxf', '.ord', '.omx', '.svg']);
+const previewState = {
+  objectUrl: null
+};
 
 renderStep();
 renderHistory();
@@ -53,17 +57,23 @@ function steps() {
 }
 
 function fileStep() {
+  const preview = filePreviewMarkup(answers.file);
   return {
     title: 'First, choose your file',
     hint: 'We keep the extension and rename only the filename body.',
     body: `
       <label for="fileInput">Upload file<input id="fileInput" type="file" required /></label>
       <p class="tiny">${answers.file ? `${answers.file.name} (${formatBytes(answers.file.size)})` : 'No file selected yet.'}</p>
+      ${preview ? `<div class="file-preview-wrap">${preview}</div>` : ''}
     `,
     setup: () => {
       const input = byId('fileInput');
-      input.onchange = () => {
+      input.onchange = async () => {
+        releasePreviewObjectUrl();
         answers.file = input.files?.[0] || null;
+        if (answers.file) {
+          await preparePreviewData(answers.file);
+        }
         renderStep();
       };
     },
@@ -426,6 +436,7 @@ function persistRecord(generated, savePath) {
 }
 
 function resetForNewFile() {
+  releasePreviewObjectUrl();
   answers.file = null;
   answers.assemblyMode = '3D';
   answers.scope = 'single';
@@ -577,6 +588,250 @@ function extractExtension(filename) {
   const lastDot = name.lastIndexOf('.');
   if (lastDot <= 0 || lastDot === name.length - 1) return '';
   return name.slice(lastDot);
+}
+
+function filePreviewMarkup(file) {
+  if (!file || !file.preview) return '';
+
+  const { mode, content } = file.preview;
+  if (mode === 'svg') {
+    return `<p class="tiny preview-title">Quick preview</p><div class="file-preview-pop"><img src="${content}" alt="2D preview of ${file.name}" /></div>`;
+  }
+
+  if (mode === 'message') {
+    return `<p class="tiny preview-title">Quick preview</p><div class="file-preview-pop"><p class="tiny preview-message">${escapeHtml(content)}</p></div>`;
+  }
+
+  return '';
+}
+
+async function preparePreviewData(file) {
+  const ext = extractExtension(file.name).toLowerCase();
+  if (!previewableExtensions.has(ext)) {
+    file.preview = null;
+    return;
+  }
+
+  if (ext === '.svg') {
+    previewState.objectUrl = URL.createObjectURL(file);
+    file.preview = { mode: 'svg', content: previewState.objectUrl };
+    return;
+  }
+
+  const content = await file.text();
+  const previewSvg = renderCadToSvgDataUrl(content);
+  file.preview = previewSvg
+    ? { mode: 'svg', content: previewSvg }
+    : { mode: 'message', content: '2D preview unavailable for this file.' };
+}
+
+function renderCadToSvgDataUrl(text) {
+  const segments = parseCadSegments(text);
+  if (!segments.length) return '';
+
+  const bounds = segments.reduce((acc, item) => {
+    acc.minX = Math.min(acc.minX, item.x1, item.x2);
+    acc.maxX = Math.max(acc.maxX, item.x1, item.x2);
+    acc.minY = Math.min(acc.minY, item.y1, item.y2);
+    acc.maxY = Math.max(acc.maxY, item.y1, item.y2);
+    return acc;
+  }, { minX: Infinity, maxX: -Infinity, minY: Infinity, maxY: -Infinity });
+
+  const width = Math.max(1, bounds.maxX - bounds.minX);
+  const height = Math.max(1, bounds.maxY - bounds.minY);
+  const pad = Math.max(width, height) * 0.08;
+  const vbX = bounds.minX - pad;
+  const vbY = bounds.minY - pad;
+  const vbW = width + (pad * 2);
+  const vbH = height + (pad * 2);
+
+  const paths = segments
+    .map(item => `<line x1="${item.x1}" y1="${-item.y1}" x2="${item.x2}" y2="${-item.y2}"/>`)
+    .join('');
+
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${vbX} ${-(vbY + vbH)} ${vbW} ${vbH}"><rect x="${vbX}" y="${-(vbY + vbH)}" width="${vbW}" height="${vbH}" fill="#ffffff"/><g stroke="#32407a" stroke-width="${Math.max(vbW, vbH) / 450}" fill="none" stroke-linecap="round">${paths}</g></svg>`;
+
+  return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
+}
+
+function parseCadSegments(text) {
+  const lines = String(text || '').split(/\r?\n/);
+  const pairs = [];
+  for (let i = 0; i < lines.length; i += 2) {
+    const code = Number.parseInt(String(lines[i] || '').trim(), 10);
+    if (!Number.isFinite(code)) continue;
+    pairs.push({ code, value: String(lines[i + 1] || '').trim() });
+  }
+
+  const entities = [];
+  let section = '';
+  let current = null;
+
+  for (let i = 0; i < pairs.length; i += 1) {
+    const pair = pairs[i];
+    if (pair.code !== 0) {
+      if (current) current.data.push(pair);
+      continue;
+    }
+
+    const marker = pair.value.toUpperCase();
+    if (marker === 'SECTION') {
+      const namePair = pairs[i + 1];
+      if (namePair?.code === 2) {
+        section = namePair.value.toUpperCase();
+        i += 1;
+      }
+      continue;
+    }
+
+    if (marker === 'ENDSEC') {
+      section = '';
+      current = null;
+      continue;
+    }
+
+    if (section !== 'ENTITIES') continue;
+
+    if (current) entities.push(current);
+    current = { type: marker, data: [] };
+  }
+  if (current) entities.push(current);
+
+  const segments = [];
+  let polyline = null;
+
+  entities.forEach(entity => {
+    if (entity.type === 'LINE') {
+      const x1 = numberCode(entity.data, 10);
+      const y1 = numberCode(entity.data, 20);
+      const x2 = numberCode(entity.data, 11);
+      const y2 = numberCode(entity.data, 21);
+      if ([x1, y1, x2, y2].every(Number.isFinite)) segments.push({ x1, y1, x2, y2 });
+      return;
+    }
+
+    if (entity.type === 'CIRCLE') {
+      const cx = numberCode(entity.data, 10);
+      const cy = numberCode(entity.data, 20);
+      const r = numberCode(entity.data, 40);
+      if ([cx, cy, r].every(Number.isFinite) && r > 0) {
+        segments.push(...arcToSegments(cx, cy, r, 0, 360));
+      }
+      return;
+    }
+
+    if (entity.type === 'ARC') {
+      const cx = numberCode(entity.data, 10);
+      const cy = numberCode(entity.data, 20);
+      const r = numberCode(entity.data, 40);
+      const start = numberCode(entity.data, 50);
+      const end = numberCode(entity.data, 51);
+      if ([cx, cy, r, start, end].every(Number.isFinite) && r > 0) {
+        segments.push(...arcToSegments(cx, cy, r, start, end));
+      }
+      return;
+    }
+
+    if (entity.type === 'LWPOLYLINE') {
+      const points = extractPoints(entity.data);
+      const closed = (intCode(entity.data, 70) & 1) === 1;
+      segments.push(...pointsToSegments(points, closed));
+      return;
+    }
+
+    if (entity.type === 'POLYLINE') {
+      polyline = { points: [], closed: (intCode(entity.data, 70) & 1) === 1 };
+      return;
+    }
+
+    if (entity.type === 'VERTEX' && polyline) {
+      const x = numberCode(entity.data, 10);
+      const y = numberCode(entity.data, 20);
+      if ([x, y].every(Number.isFinite)) polyline.points.push({ x, y });
+      return;
+    }
+
+    if (entity.type === 'SEQEND' && polyline) {
+      segments.push(...pointsToSegments(polyline.points, polyline.closed));
+      polyline = null;
+    }
+  });
+
+  return segments;
+}
+
+function arcToSegments(cx, cy, radius, startDeg, endDeg) {
+  let start = startDeg;
+  let end = endDeg;
+  while (end < start) end += 360;
+  const sweep = Math.max(1, end - start);
+  const steps = Math.max(8, Math.ceil(sweep / 10));
+  const points = [];
+
+  for (let i = 0; i <= steps; i += 1) {
+    const angle = (start + ((sweep * i) / steps)) * (Math.PI / 180);
+    points.push({ x: cx + (radius * Math.cos(angle)), y: cy + (radius * Math.sin(angle)) });
+  }
+
+  return pointsToSegments(points, false);
+}
+
+function extractPoints(data) {
+  const points = [];
+  let currentX = null;
+
+  data.forEach(pair => {
+    if (pair.code === 10) {
+      currentX = Number.parseFloat(pair.value);
+      return;
+    }
+
+    if (pair.code === 20 && Number.isFinite(currentX)) {
+      const y = Number.parseFloat(pair.value);
+      if (Number.isFinite(y)) points.push({ x: currentX, y });
+      currentX = null;
+    }
+  });
+
+  return points;
+}
+
+function pointsToSegments(points, closed) {
+  const out = [];
+  for (let i = 0; i < points.length - 1; i += 1) {
+    out.push({ x1: points[i].x, y1: points[i].y, x2: points[i + 1].x, y2: points[i + 1].y });
+  }
+
+  if (closed && points.length > 2) {
+    out.push({ x1: points[points.length - 1].x, y1: points[points.length - 1].y, x2: points[0].x, y2: points[0].y });
+  }
+
+  return out;
+}
+
+function numberCode(data, code) {
+  const found = data.find(item => item.code === code);
+  const n = Number.parseFloat(found?.value || '');
+  return Number.isFinite(n) ? n : NaN;
+}
+
+function intCode(data, code) {
+  const found = data.find(item => item.code === code);
+  const n = Number.parseInt(found?.value || '', 10);
+  return Number.isFinite(n) ? n : 0;
+}
+
+function releasePreviewObjectUrl() {
+  if (!previewState.objectUrl) return;
+  URL.revokeObjectURL(previewState.objectUrl);
+  previewState.objectUrl = null;
+}
+
+function escapeHtml(value) {
+  return String(value || '')
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;');
 }
 
 function wireEnterToNext() {

@@ -104,6 +104,30 @@ button:disabled { opacity: 0.6; cursor: not-allowed; transform: none; box-shadow
 button.ghost { visibility: hidden; pointer-events: none; }
 
 .tiny { color: var(--muted); font-size: 0.9rem; }
+.preview-title { margin: 0.35rem 0 0.3rem; }
+.file-preview-wrap {
+  margin-top: 0.35rem;
+  max-width: 360px;
+}
+.file-preview-pop {
+  background: #f8f9ff;
+  border: 1px solid #dfe5fa;
+  border-radius: 12px;
+  padding: 0.5rem;
+  box-shadow: 0 10px 20px rgba(24, 47, 94, 0.08);
+}
+.file-preview-pop img {
+  width: 100%;
+  height: 210px;
+  object-fit: contain;
+  display: block;
+  background: #fff;
+  border-radius: 8px;
+  border: 1px solid #e4e8f7;
+}
+.preview-message {
+  margin: 0;
+}
 #finalName { font-weight: 700; word-break: break-all; }
 #finalPath { color: var(--muted); word-break: break-all; }
 #history { list-style: none; padding-left: 0; margin: 0; }
