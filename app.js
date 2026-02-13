@@ -64,7 +64,6 @@ function steps() {
       setup: () => setupChoiceButtons('type', value => {
         answers.type = value;
         if (answers.type !== 'NS') answers.scope = 'single';
-        renderStep();
       }),
       valid: () => typeChoices.includes(answers.type),
       error: 'Please select a valid type.'
