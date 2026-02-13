@@ -220,19 +220,48 @@ function revisionStep() {
 function cutStep() {
   if (answers.type !== 'NS') return null;
 
+  const suggested = nextCut(state.cutCounter);
+  const quickCuts = Array.from(new Set([
+    suggested,
+    nextCut(state.cutCounter + 1),
+    nextCut(Math.max(1, state.cutCounter - 1))
+  ]));
+
   return {
     title: 'Cut number',
-    hint: 'Format: C###. We auto-format as you type.',
-    body: `<label for="cut">Cut<input id="cut" value="${answers.cut}" placeholder="C001" /></label>`,
+    hint: 'Use the number field or tap a quick option. We format as C### for you.',
+    body: `
+      <label for="cutNum">Cut number
+        <input id="cutNum" type="number" min="1" max="999" step="1" value="${cutToNumber(answers.cut)}" />
+      </label>
+      <p class="tiny">Cut token: <strong id="cutPreview">${answers.cut}</strong></p>
+      <p class="tiny">Quick picks:</p>
+      ${choiceButtons('cutQuick', quickCuts, answers.cut)}
+      <button id="useSuggested" type="button" class="secondary">Use suggested ${suggested}</button>
+    `,
     setup: () => {
-      const el = byId('cut');
-      el.oninput = () => {
-        answers.cut = normalizeCut(el.value);
-        el.value = answers.cut;
+      const input = byId('cutNum');
+      const preview = byId('cutPreview');
+      const applyNumber = () => {
+        const n = Math.min(999, Math.max(1, Number.parseInt(input.value || '1', 10) || 1));
+        answers.cut = nextCut(n);
+        input.value = String(n);
+        preview.textContent = answers.cut;
       };
-      el.onblur = () => {
-        answers.cut = normalizeCut(el.value);
-        el.value = answers.cut;
+
+      input.oninput = applyNumber;
+      input.onblur = applyNumber;
+
+      setupChoiceButtons('cutQuick', value => {
+        answers.cut = value;
+        input.value = String(cutToNumber(value));
+        preview.textContent = value;
+      });
+
+      byId('useSuggested').onclick = () => {
+        answers.cut = suggested;
+        input.value = String(cutToNumber(suggested));
+        preview.textContent = suggested;
       };
     },
     valid: () => /^C\d{3}$/.test(answers.cut),
@@ -454,6 +483,11 @@ function saveState() {
 
 function nextCut(n) {
   return `C${String(n).padStart(3, '0')}`;
+}
+
+function cutToNumber(cut) {
+  const n = Number.parseInt(String(cut || '').replace(/^C/i, ''), 10);
+  return Number.isFinite(n) && n > 0 ? n : 1;
 }
 
 function normalizeCut(value) {

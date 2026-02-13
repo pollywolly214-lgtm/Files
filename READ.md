@@ -17,7 +17,7 @@ A simple static wizard for naming uploaded files using your Project → ASY → 
    - full list from `Gauge Sheet` through `2in` in `1/16` increments (shown as fractions in selector)
    - filename stores thickness in decimal format (example: `1/2` becomes `0.50in`, `3/16` becomes `0.1875in`)
 9. Enter revision.
-10. If `NS`, confirm/adjust cut (`C###`, auto-formatted).
+10. If `NS`, confirm/adjust cut (`C###`) with a numeric entry + quick-pick buttons.
 11. Review generated filename/path and download renamed copy.
 
 ## UX updates
